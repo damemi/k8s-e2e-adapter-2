@@ -21,6 +21,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/emicklei/go-restful"
 	"github.com/spf13/cobra"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
@@ -39,7 +40,6 @@ func NewCommandStartE2EAdapterServer(out, errOut io.Writer, stopCh <-chan struct
 	o := E2EAdapterServerOptions{
 		CustomMetricsAdapterServerOptions: baseOpts,
 		DiscoveryInterval:                 10 * time.Minute,
-		EnableCustomMetricsAPI:            true,
 	}
 
 	cmd := &cobra.Command{
@@ -70,8 +70,6 @@ func NewCommandStartE2EAdapterServer(out, errOut io.Writer, stopCh <-chan struct
 		"any described objects")
 	flags.DurationVar(&o.DiscoveryInterval, "discovery-interval", o.DiscoveryInterval, ""+
 		"interval at which to refresh API discovery information")
-	flags.BoolVar(&o.EnableCustomMetricsAPI, "enable-custom-metrics-api", o.EnableCustomMetricsAPI, ""+
-		"whether to enable Custom Metrics API")
 
 	return cmd
 }
@@ -112,10 +110,9 @@ func (o E2EAdapterServerOptions) RunCustomMetricsAdapterServer(stopCh <-chan str
 		return fmt.Errorf("unable to construct lister client to initialize provider: %v", err)
 	}
 
-	metricsProvider := provider.NewE2EProvider(clientPool, dynamicMapper)
-	customMetricsProvider := metricsProvider
-	if !o.EnableCustomMetricsAPI {
-		customMetricsProvider = nil
+	customMetricsProvider := provider.NewE2EProvider(clientPool, dynamicMapper)
+	if e2eProvider, ok := customMetricsProvider.(*provider.E2EProvider); ok {
+		restful.DefaultContainer.Add(e2eProvider.WebService())
 	}
 
 	// In this example, the same provider implements both Custom Metrics API
@@ -133,6 +130,4 @@ type E2EAdapterServerOptions struct {
 	RemoteKubeConfigFile string
 	// DiscoveryInterval is the interval at which discovery information is refreshed
 	DiscoveryInterval time.Duration
-	// EnableCustomMetricsAPI switches on sample apiserver for Custom Metrics API
-	EnableCustomMetricsAPI bool
 }

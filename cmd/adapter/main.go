@@ -18,10 +18,12 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 	"runtime"
 
 	"github.com/damemi/k8s-e2e-adapter/cmd/adapter/app"
+	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/util/logs"
 )
@@ -35,6 +37,11 @@ func main() {
 	}
 
 	cmd := app.NewCommandStartE2EAdapterServer(os.Stdout, os.Stderr, wait.NeverStop)
+
+	go func() {
+		glog.Fatal(http.ListenAndServe(":8080", nil))
+	}()
+
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
 	if err := cmd.Execute(); err != nil {
 		panic(err)

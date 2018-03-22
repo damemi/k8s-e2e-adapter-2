@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/emicklei/go-restful"
 	"github.com/golang/glog"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -34,7 +35,7 @@ import (
 	"github.com/kubernetes-incubator/custom-metrics-apiserver/pkg/provider"
 )
 
-type e2eProvider struct {
+type E2EProvider struct {
 	client dynamic.ClientPool
 	mapper apimeta.RESTMapper
 
@@ -42,14 +43,35 @@ type e2eProvider struct {
 }
 
 func NewE2EProvider(client dynamic.ClientPool, mapper apimeta.RESTMapper) provider.CustomMetricsProvider {
-	return &e2eProvider{
+	return &E2EProvider{
 		client: client,
 		mapper: mapper,
 		values: make(map[provider.MetricInfo]int64),
 	}
 }
 
-func (p *e2eProvider) valueFor(groupResource schema.GroupResource, metricName string, namespaced bool) (int64, error) {
+func (p *E2EProvider) WebService() *restful.WebService {
+	ws := new(restful.WebService)
+
+	ws.Path("/metrics").
+		Consumes(restful.MIME_XML, restful.MIME_JSON).
+		Produces(restful.MIME_JSON, restful.MIME_XML)
+
+	ws.Route(ws.PUT("/{namespace}/{resourceType}/{name}/{metric}/{value}").To(p.updateResource))
+	return ws
+}
+
+func (p *E2EProvider) updateResource(request *restful.Request, response *restful.Response) {
+	namespace := request.PathParameter("namespace")
+	resourceType := request.PathParameter("resourceType")
+	name := request.PathParameter("name")
+	metric := request.PathParameter("metric")
+	value := request.PathParameter("value")
+
+	glog.Infof("Received %s %s %s %s %s \n%+v", namespace, resourceType, name, metric, value, request)
+}
+
+func (p *E2EProvider) valueFor(groupResource schema.GroupResource, metricName string, namespaced bool) (int64, error) {
 	info := provider.MetricInfo{
 		GroupResource: groupResource,
 		Metric:        metricName,
@@ -68,7 +90,7 @@ func (p *e2eProvider) valueFor(groupResource schema.GroupResource, metricName st
 	return value, nil
 }
 
-func (p *e2eProvider) metricFor(value int64, groupResource schema.GroupResource, namespace string, name string, metricName string) (*custom_metrics.MetricValue, error) {
+func (p *E2EProvider) metricFor(value int64, groupResource schema.GroupResource, namespace string, name string, metricName string) (*custom_metrics.MetricValue, error) {
 	kind, err := p.mapper.KindFor(groupResource.WithVersion(""))
 	if err != nil {
 		return nil, err
@@ -87,7 +109,7 @@ func (p *e2eProvider) metricFor(value int64, groupResource schema.GroupResource,
 	}, nil
 }
 
-func (p *e2eProvider) metricsFor(totalValue int64, groupResource schema.GroupResource, metricName string, list runtime.Object) (*custom_metrics.MetricValueList, error) {
+func (p *E2EProvider) metricsFor(totalValue int64, groupResource schema.GroupResource, metricName string, list runtime.Object) (*custom_metrics.MetricValueList, error) {
 	if !apimeta.IsListType(list) {
 		return nil, fmt.Errorf("returned object was not a list")
 	}
@@ -118,7 +140,7 @@ func (p *e2eProvider) metricsFor(totalValue int64, groupResource schema.GroupRes
 	}, nil
 }
 
-func (p *e2eProvider) GetRootScopedMetricByName(groupResource schema.GroupResource, name string, metricName string) (*custom_metrics.MetricValue, error) {
+func (p *E2EProvider) GetRootScopedMetricByName(groupResource schema.GroupResource, name string, metricName string) (*custom_metrics.MetricValue, error) {
 	value, err := p.valueFor(groupResource, metricName, false)
 	if err != nil {
 		return nil, err
@@ -126,7 +148,7 @@ func (p *e2eProvider) GetRootScopedMetricByName(groupResource schema.GroupResour
 	return p.metricFor(value, groupResource, "", name, metricName)
 }
 
-func (p *e2eProvider) GetRootScopedMetricBySelector(groupResource schema.GroupResource, selector labels.Selector, metricName string) (*custom_metrics.MetricValueList, error) {
+func (p *E2EProvider) GetRootScopedMetricBySelector(groupResource schema.GroupResource, selector labels.Selector, metricName string) (*custom_metrics.MetricValueList, error) {
 	// construct a client to list the names of objects matching the label selector
 	client, err := p.client.ClientForGroupVersionResource(groupResource.WithVersion(""))
 	if err != nil {
@@ -154,7 +176,7 @@ func (p *e2eProvider) GetRootScopedMetricBySelector(groupResource schema.GroupRe
 	return p.metricsFor(totalValue, groupResource, metricName, matchingObjectsRaw)
 }
 
-func (p *e2eProvider) GetNamespacedMetricByName(groupResource schema.GroupResource, namespace string, name string, metricName string) (*custom_metrics.MetricValue, error) {
+func (p *E2EProvider) GetNamespacedMetricByName(groupResource schema.GroupResource, namespace string, name string, metricName string) (*custom_metrics.MetricValue, error) {
 	value, err := p.valueFor(groupResource, metricName, true)
 	if err != nil {
 		return nil, err
@@ -162,7 +184,7 @@ func (p *e2eProvider) GetNamespacedMetricByName(groupResource schema.GroupResour
 	return p.metricFor(value, groupResource, namespace, name, metricName)
 }
 
-func (p *e2eProvider) GetNamespacedMetricBySelector(groupResource schema.GroupResource, namespace string, selector labels.Selector, metricName string) (*custom_metrics.MetricValueList, error) {
+func (p *E2EProvider) GetNamespacedMetricBySelector(groupResource schema.GroupResource, namespace string, selector labels.Selector, metricName string) (*custom_metrics.MetricValueList, error) {
 	// construct a client to list the names of objects matching the label selector
 	client, err := p.client.ClientForGroupVersionResource(groupResource.WithVersion(""))
 	if err != nil {
@@ -190,7 +212,7 @@ func (p *e2eProvider) GetNamespacedMetricBySelector(groupResource schema.GroupRe
 	return p.metricsFor(totalValue, groupResource, metricName, matchingObjectsRaw)
 }
 
-func (p *e2eProvider) ListAllMetrics() []provider.MetricInfo {
+func (p *E2EProvider) ListAllMetrics() []provider.MetricInfo {
 	// TODO: maybe dynamically generate this?
 	return []provider.MetricInfo{
 		{
