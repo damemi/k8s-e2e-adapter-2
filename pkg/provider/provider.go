@@ -18,6 +18,7 @@ package provider
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/emicklei/go-restful"
@@ -53,22 +54,45 @@ func NewE2EProvider(client dynamic.ClientPool, mapper apimeta.RESTMapper) provid
 func (p *E2EProvider) WebService() *restful.WebService {
 	ws := new(restful.WebService)
 
-	ws.Path("/metrics").
-		Consumes(restful.MIME_XML, restful.MIME_JSON).
-		Produces(restful.MIME_JSON, restful.MIME_XML)
+	ws.Path("/metrics")
 
-	ws.Route(ws.PUT("/{namespace}/{resourceType}/{name}/{metric}/{value}").To(p.updateResource))
+	ws.Route(ws.PUT("/{namespace}/{resourceType}/{name}/{metric}/{value}").To(p.updateResource).
+		Param(ws.PathParameter("value", "value to set metric").DataType("integer").DefaultValue("0")))
 	return ws
 }
 
 func (p *E2EProvider) updateResource(request *restful.Request, response *restful.Response) {
 	namespace := request.PathParameter("namespace")
+	namespaced := false
+	if len(namespace) > 0 {
+		namespaced = true
+	}
 	resourceType := request.PathParameter("resourceType")
-	name := request.PathParameter("name")
-	metric := request.PathParameter("metric")
+	//name := request.PathParameter("name")
+	metricName := request.PathParameter("metric")
 	value := request.PathParameter("value")
 
-	glog.Infof("Received %s %s %s %s %s \n%+v", namespace, resourceType, name, metric, value, request)
+	groupResource := schema.GroupResource{
+		Group:    "",
+		Resource: resourceType,
+	}
+
+	info := provider.MetricInfo{
+		GroupResource: groupResource,
+		Metric:        metricName,
+		Namespaced:    namespaced,
+	}
+
+	info, _, err := info.Normalized(p.mapper)
+	if err != nil {
+		glog.Errorf("Error normalizing info: %s", err)
+	}
+
+	i, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		glog.Errorf("Error converting value to int: %s", err)
+	}
+	p.values[info] = i
 }
 
 func (p *E2EProvider) valueFor(groupResource schema.GroupResource, metricName string, namespaced bool) (int64, error) {
@@ -78,14 +102,7 @@ func (p *E2EProvider) valueFor(groupResource schema.GroupResource, metricName st
 		Namespaced:    namespaced,
 	}
 
-	info, _, err := info.Normalized(p.mapper)
-	if err != nil {
-		return 0, err
-	}
-
 	value := p.values[info]
-	value += 1
-	p.values[info] = value
 
 	return value, nil
 }
