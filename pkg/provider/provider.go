@@ -40,14 +40,14 @@ type E2EProvider struct {
 	client dynamic.ClientPool
 	mapper apimeta.RESTMapper
 
-	values map[provider.MetricInfo]int64
+	values map[provider.CustomMetricInfo]int64
 }
 
 func NewE2EProvider(client dynamic.ClientPool, mapper apimeta.RESTMapper) provider.CustomMetricsProvider {
 	return &E2EProvider{
 		client: client,
 		mapper: mapper,
-		values: make(map[provider.MetricInfo]int64),
+		values: make(map[provider.CustomMetricInfo]int64),
 	}
 }
 
@@ -77,7 +77,7 @@ func (p *E2EProvider) updateResource(request *restful.Request, response *restful
 		Resource: resourceType,
 	}
 
-	info := provider.MetricInfo{
+	info := provider.CustomMetricInfo{
 		GroupResource: groupResource,
 		Metric:        metricName,
 		Namespaced:    namespaced,
@@ -96,7 +96,7 @@ func (p *E2EProvider) updateResource(request *restful.Request, response *restful
 }
 
 func (p *E2EProvider) valueFor(groupResource schema.GroupResource, metricName string, namespaced bool) (int64, error) {
-	info := provider.MetricInfo{
+	info := provider.CustomMetricInfo{
 		GroupResource: groupResource,
 		Metric:        metricName,
 		Namespaced:    namespaced,
@@ -229,9 +229,9 @@ func (p *E2EProvider) GetNamespacedMetricBySelector(groupResource schema.GroupRe
 	return p.metricsFor(totalValue, groupResource, metricName, matchingObjectsRaw)
 }
 
-func (p *E2EProvider) ListAllMetrics() []provider.MetricInfo {
+func (p *E2EProvider) ListAllMetrics() []provider.CustomMetricInfo {
 	// TODO: maybe dynamically generate this?
-	return []provider.MetricInfo{
+	return []provider.CustomMetricInfo{
 		{
 			GroupResource: schema.GroupResource{Group: "", Resource: "pods"},
 			Metric:        "packets-per-second",

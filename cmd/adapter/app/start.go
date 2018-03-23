@@ -116,7 +116,7 @@ func (o E2EAdapterServerOptions) RunCustomMetricsAdapterServer(stopCh <-chan str
 	}
 
 	// In this example, the same provider implements both Custom Metrics API
-	server, err := config.Complete().New("e2e-custom-metrics-adapter", customMetricsProvider)
+	server, err := config.Complete().New("e2e-custom-metrics-adapter", customMetricsProvider, nil)
 	if err != nil {
 		return err
 	}
